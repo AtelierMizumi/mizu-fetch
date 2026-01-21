@@ -527,7 +527,7 @@ fn render_settings(app: &App, frame: &mut Frame, area: Rect) {
 
     let inner_area = Rect::new(area.x + 1, area.y + 1, area.width - 2, area.height - 2);
 
-    let options = vec![
+    let options = [
         ("Refresh Rate", format!("{} ms", app.refresh_rate_ms)),
         (
             "Theme Color",

@@ -175,10 +175,10 @@ impl SystemInfo {
             if let Some(process) = sys.process(pid) {
                 if let Some(parent_pid) = process.parent() {
                     if let Some(parent) = sys.process(parent_pid) {
-                        if let Some(grandparent_pid) = parent.parent() {
-                            if let Some(grandparent) = sys.process(grandparent_pid) {
-                                return grandparent.name().to_string_lossy().to_string();
-                            }
+                        if let Some(grandparent_pid) = parent.parent()
+                            && let Some(grandparent) = sys.process(grandparent_pid)
+                        {
+                            return grandparent.name().to_string_lossy().to_string();
                         }
                     }
                 }
