@@ -1,7 +1,6 @@
-use std::process::Command;
 use sysinfo::{Disks, Networks, System};
 
-mod providers;
+pub mod providers;
 
 use providers::battery::BatteryInfo;
 use providers::cpu::CpuInfo;
@@ -10,6 +9,13 @@ use providers::gpu::GpuInfo;
 use providers::memory::MemoryInfo;
 use providers::style::StyleInfo;
 
+// New imports
+use providers::disk::DiskProvider;
+use providers::network::{NetworkInfo, NetworkProvider};
+use providers::os::OsInfo;
+// PackageProvider is used in App, not here directly for async reasons,
+// but SystemInfo holds the display string.
+
 pub struct ProcessInfo {
     pub pid: u32,
     pub name: String,
@@ -17,37 +23,20 @@ pub struct ProcessInfo {
     pub mem: u64,
 }
 
-pub struct NetworkInfo {
-    pub name: String,
-    pub rx: u64,
-    pub tx: u64,
-    pub total_rx: u64,
-    pub total_tx: u64,
-}
-
 pub struct SystemInfo {
-    // Static / Lazy Loaded fields
-    pub os_name: String,
-    pub kernel_version: String,
-    pub hostname: String,
-    pub shell: String,
-    pub terminal: String,
-    pub de_wm: String,
-    pub wm: String, // Separate WM
-    pub packages: String,
-    pub local_ip: String,
-    pub display: String,
+    // Modular Components
+    pub os: OsInfo,
+    pub cpu_info: CpuInfo,
+    
+    // Static / Lazy fields
+    pub gpus: Vec<String>,
     pub wm_theme: String,
     pub theme: String,
     pub icons: String,
     pub font: String,
     pub cursor: String,
     pub battery: String,
-    pub locale: String,
-
-    // Hardware Info (Cached/Lazy)
-    pub cpu_info: CpuInfo,
-    pub gpus: Vec<String>,
+    pub display: String,
 
     // Dynamic Fields (Refreshed on tick)
     pub uptime: u64,
@@ -59,6 +48,10 @@ pub struct SystemInfo {
     pub disk_usage: String,
     pub processes: Vec<ProcessInfo>,
     pub networks: Vec<NetworkInfo>,
+    pub local_ip: String,
+    
+    // Async Fields (Updated by App)
+    pub packages: String,
 
     // Private Handles
     sys: System,
@@ -74,39 +67,24 @@ impl Default for SystemInfo {
 
 impl SystemInfo {
     pub fn new() -> Self {
-        // Initialize handles - BUT DO NOT REFRESH ALL
-        // System::new() creates an empty system object
         let mut sys = System::new();
+        
+        // Initialize handles
+        let net_handle = Networks::new_with_refreshed_list();
+        let disk_handle = Disks::new_with_refreshed_list();
 
-        // Only refresh specific components needed for static info
-        sys.refresh_cpu_usage(); // Minimal cpu refresh for static info if needed, but `cpus()` needs `refresh_cpu()`
-
-        // For static info like OS name, Hostname, we don't need a full refresh
-        let os_name = System::name().unwrap_or_else(|| "Unknown".to_string());
-        let kernel_version = System::kernel_version().unwrap_or_else(|| "Unknown".to_string());
-        let hostname = System::host_name().unwrap_or_else(|| "localhost".to_string());
+        // Refresh specific components for static info
+        sys.refresh_cpu_usage(); 
+        
+        // OS Info (Static)
+        let os = OsInfo::new(&mut sys);
 
         // Lazy load CPU info
-        // We need to refresh cpu list once to get brands
         sys.refresh_cpu_all();
         let cpu_info = CpuInfo::new(&sys);
 
-        // GPU Detection (Native + Fallback)
+        // GPU Detection
         let gpu_info = GpuInfo::new();
-
-        // Shell & DE
-        let shell_path = std::env::var("SHELL").unwrap_or_else(|_| "Unknown".to_string());
-        let shell = shell_path
-            .split('/')
-            .next_back()
-            .unwrap_or("Unknown")
-            .to_string();
-
-        let de_wm = std::env::var("XDG_CURRENT_DESKTOP")
-            .or_else(|_| std::env::var("DESKTOP_SESSION"))
-            .unwrap_or_else(|_| "Unknown".to_string());
-
-        let wm = Self::detect_wm(&sys);
 
         // Style Info
         let style = StyleInfo::new(&sys);
@@ -117,184 +95,49 @@ impl SystemInfo {
         // Battery Info
         let battery = BatteryInfo::new();
 
-        // Locale
-        let locale = std::env::var("LANG").unwrap_or_else(|_| "Unknown".to_string());
-
-        // Packages (Expensive, could be lazy loaded or async)
-        // For now keep it here but we should move it out of the main thread in future
-        let packages = Self::count_packages();
-
-        // Terminal
-        let terminal = Self::detect_terminal(&mut sys);
-
-        let net_handle = Networks::new_with_refreshed_list();
-        let disk_handle = Disks::new_with_refreshed_list();
-
         // Initial Memory Fetch
         let mem_info = MemoryInfo::new(&mut sys);
+        
+        // Network & Disk initial fetch
+        let networks = NetworkProvider::get_networks(&net_handle);
+        let local_ip = NetworkProvider::get_local_ip(&net_handle);
+        let disk_usage = DiskProvider::get_disk_usage(&disk_handle);
 
-        let mut info = Self {
-            os_name,
-            kernel_version,
-            hostname,
-            uptime: System::uptime(),
-            shell,
-            terminal,
-            de_wm,
-            wm,
-            packages,
-            local_ip: "127.0.0.1".to_string(),
-            display,
+        Self {
+            os,
+            cpu_info,
+            gpus: gpu_info.names,
             wm_theme: style.wm_theme,
             theme: style.theme,
             icons: style.icons,
             font: style.font,
             cursor: style.cursor,
             battery,
-            locale,
-            cpu_info,
+            display,
+            uptime: System::uptime(),
             cpu_usage: 0.0,
-            gpus: gpu_info.names,
             memory_used: mem_info.used,
             memory_total: mem_info.total,
             swap_used: mem_info.swap_used,
             swap_total: mem_info.swap_total,
-            disk_usage: "Unknown".to_string(),
+            disk_usage,
             processes: Vec::new(),
-            networks: Vec::new(),
+            networks,
+            local_ip,
+            packages: "Calculating...".to_string(), // Async placeholder
             sys,
             net_handle,
             disk_handle,
-        };
-
-        // Initial partial refresh for dynamic data
-        info.refresh(true);
-        info
-    }
-
-    fn detect_wm(sys: &System) -> String {
-        // Simple scan for common WM process names
-        let wms = [
-            "kwin_wayland",
-            "kwin_x11",
-            "gnome-shell",
-            "mutter",
-            "sway",
-            "hyprland",
-            "openbox",
-            "i3",
-            "bspwm",
-            "xfwm4",
-            "metacity",
-            "weston",
-            "labwc",
-            "wayfire",
-        ];
-
-        for (_pid, process) in sys.processes() {
-            let name = process.name().to_string_lossy();
-            for wm in wms {
-                if name.contains(wm) {
-                    // Prettify name
-                    if wm.starts_with("kwin") {
-                        return "KWin".to_string();
-                    }
-                    if wm == "gnome-shell" {
-                        return "Mutter (GNOME)".to_string();
-                    }
-                    return wm.to_string(); // Return capitalized?
-                }
-            }
         }
-        "Unknown".to_string()
-    }
-
-    fn count_packages() -> String {
-        let mut pkgs = Vec::new();
-        // Pacman
-        if let Ok(output) = Command::new("sh")
-            .arg("-c")
-            .arg("pacman -Qq | wc -l")
-            .output()
-        {
-            let count = String::from_utf8(output.stdout)
-                .unwrap_or_default()
-                .trim()
-                .to_string();
-            if !count.is_empty() && count != "0" {
-                pkgs.push(format!("{} (pacman)", count));
-            }
-        }
-        // Dpkg (Debian/Ubuntu)
-        if let Ok(output) = Command::new("sh")
-            .arg("-c")
-            .arg("dpkg-query -f '${binary:Package}\n' -W | wc -l")
-            .output()
-        {
-            let count = String::from_utf8(output.stdout)
-                .unwrap_or_default()
-                .trim()
-                .to_string();
-            if !count.is_empty() && count != "0" {
-                pkgs.push(format!("{} (dpkg)", count));
-            }
-        }
-        // RPM (Fedora/RHEL)
-        if let Ok(output) = Command::new("sh").arg("-c").arg("rpm -qa | wc -l").output() {
-            let count = String::from_utf8(output.stdout)
-                .unwrap_or_default()
-                .trim()
-                .to_string();
-            if !count.is_empty() && count != "0" {
-                pkgs.push(format!("{} (rpm)", count));
-            }
-        }
-        // Flatpak
-        if let Ok(output) = Command::new("sh")
-            .arg("-c")
-            .arg("flatpak list --app | wc -l")
-            .output()
-        {
-            let count = String::from_utf8(output.stdout)
-                .unwrap_or_default()
-                .trim()
-                .to_string();
-            if !count.is_empty() && count != "0" {
-                pkgs.push(format!("{} (flatpak-user)", count));
-            }
-        }
-
-        if pkgs.is_empty() {
-            "Unknown".to_string()
-        } else {
-            pkgs.join(", ")
-        }
-    }
-
-    fn detect_terminal(sys: &mut System) -> String {
-        sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-        if let Ok(pid) = sysinfo::get_current_pid()
-            && let Some(process) = sys.process(pid)
-            && let Some(parent_pid) = process.parent()
-            && let Some(parent) = sys.process(parent_pid)
-            && let Some(grandparent_pid) = parent.parent()
-            && let Some(grandparent) = sys.process(grandparent_pid)
-        {
-            return grandparent.name().to_string_lossy().to_string();
-        }
-        "Unknown".to_string()
     }
 
     pub fn refresh(&mut self, update_processes: bool) {
         // Targeted refreshes only
-        self.sys.refresh_cpu_usage(); // Just usage, not full list
+        self.sys.refresh_cpu_usage();
         self.sys.refresh_memory();
 
-        // Processes need list refresh but try to minimize impact if possible
-        // refresh_processes is heavy. Only run if requested.
         if update_processes {
-            self.sys
-                .refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+            self.sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
         }
 
         self.net_handle.refresh(true);
@@ -303,28 +146,20 @@ impl SystemInfo {
         // Update Dynamic Fields
         self.uptime = System::uptime();
         self.cpu_usage = self.sys.global_cpu_usage();
+        
+        // MemoryInfo::new refreshes nothing inside (it assumes sys is fresh)
         self.memory_used = self.sys.used_memory();
         self.memory_total = self.sys.total_memory();
         self.swap_used = self.sys.used_swap();
         self.swap_total = self.sys.total_swap();
 
-        // Processes (Top 50) - Only update if we refreshed them
         if update_processes {
             self.update_processes();
         }
 
-        // Network Stats
-        self.update_networks();
-
-        // Disk Usage
-        self.update_disks();
-
-        // Local IP
-        self.update_local_ip();
-
-        // Refresh battery if easy? Or just keep static for now as per design.
-        // Actually fastfetch battery status changes.
-        self.battery = BatteryInfo::new();
+        self.networks = NetworkProvider::get_networks(&self.net_handle);
+        self.local_ip = NetworkProvider::get_local_ip(&self.net_handle);
+        self.disk_usage = DiskProvider::get_disk_usage(&self.disk_handle);
     }
 
     fn update_processes(&mut self) {
@@ -347,52 +182,6 @@ impl SystemInfo {
         });
         processes.truncate(50);
         self.processes = processes;
-    }
-
-    fn update_networks(&mut self) {
-        self.networks = self
-            .net_handle
-            .iter()
-            .map(|(name, data)| NetworkInfo {
-                name: name.to_string(),
-                rx: data.received(),
-                tx: data.transmitted(),
-                total_rx: data.total_received(),
-                total_tx: data.total_transmitted(),
-            })
-            .collect();
-    }
-
-    fn update_disks(&mut self) {
-        for disk in &self.disk_handle {
-            if disk.mount_point() == std::path::Path::new("/") {
-                let total_gb = disk.total_space() as f64 / 1024.0 / 1024.0 / 1024.0;
-                let available_gb = disk.available_space() as f64 / 1024.0 / 1024.0 / 1024.0;
-                let used_gb = total_gb - available_gb;
-                let percent = (used_gb / total_gb) * 100.0;
-                let fs = disk.file_system().to_string_lossy();
-                self.disk_usage = format!(
-                    "{:.2} GiB / {:.2} GiB ({:.0}%) - {}",
-                    used_gb, total_gb, percent, fs
-                );
-                return;
-            }
-        }
-        self.disk_usage = "Unknown".to_string();
-    }
-
-    fn update_local_ip(&mut self) {
-        for (name, network) in &self.net_handle {
-            if name != "lo" {
-                for ip in network.ip_networks() {
-                    if let std::net::IpAddr::V4(ipv4) = ip.addr {
-                        self.local_ip = ipv4.to_string();
-                        return;
-                    }
-                }
-            }
-        }
-        self.local_ip = "127.0.0.1".to_string();
     }
 
     pub fn get_formatted_uptime(&self) -> String {

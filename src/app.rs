@@ -1,5 +1,7 @@
 use crate::config::Config;
 use crate::fetch::SystemInfo;
+use std::sync::mpsc;
+use std::thread;
 
 pub enum AppTab {
     Dashboard,
@@ -18,12 +20,15 @@ pub struct App {
     pub current_tab: AppTab,
     pub system_info: SystemInfo,
     pub config: Config,
-    pub process_scroll: usize, // New: state for process list scrolling
-    pub show_help: bool,       // New: toggle for help popup
+    pub process_scroll: usize, 
+    pub show_help: bool,       
 
     // Settings state
     pub settings_index: usize,
     pub refresh_rate_ms: u64,
+    
+    // Async state
+    pub package_rx: mpsc::Receiver<String>,
 }
 
 impl Default for App {
@@ -35,6 +40,15 @@ impl Default for App {
 impl App {
     pub fn new() -> Self {
         let config = Config::load();
+        
+        // Setup Async Package Fetching
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            // We use the full path to the provider
+            let count = crate::fetch::providers::packages::PackageProvider::count_packages();
+            let _ = tx.send(count);
+        });
+
         Self {
             should_quit: false,
             current_tab: AppTab::Dashboard,
@@ -44,14 +58,17 @@ impl App {
             settings_index: 0,
             refresh_rate_ms: config.refresh_rate,
             config,
+            package_rx: rx,
         }
     }
 
     pub fn on_tick(&mut self) {
-        // Only refresh processes if we are on the Processes tab or if we need to detect terminal (initial load)
-        // But here we are in the main loop.
-        // Let's only refresh processes if the current tab is Processes.
-        // This saves a lot of CPU.
+        // Check for async updates
+        if let Ok(pkg_count) = self.package_rx.try_recv() {
+            self.system_info.packages = pkg_count;
+        }
+
+        // Only refresh processes if we are on the Processes tab
         let update_processes = matches!(self.current_tab, AppTab::Processes);
         self.system_info.refresh(update_processes);
     }

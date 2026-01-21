@@ -1,6 +1,10 @@
 pub mod battery;
 pub mod cpu;
 pub mod display;
+pub mod disk;
 pub mod gpu;
 pub mod memory;
+pub mod network;
+pub mod os;
+pub mod packages;
 pub mod style;

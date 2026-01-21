@@ -227,7 +227,7 @@ fn render_top_screen(app: &App, frame: &mut Frame, area: Rect, is_width_compact:
 }
 
 fn render_logo(app: &App, frame: &mut Frame, area: Rect) {
-    let logo_lines = get_logo(&app.system_info.os_name);
+    let logo_lines = get_logo(&app.system_info.os.name);
     let logo_text = logo_lines.join("\n");
 
     // Tự động ẩn border nếu area quá nhỏ
@@ -268,24 +268,24 @@ fn render_info(app: &App, frame: &mut Frame, area: Rect) {
 
     let info_lines = vec![
         format!("                  -------------------"),
-        format!(" OS:             {}", app.system_info.os_name),
-        format!(" Host:           {}", app.system_info.hostname),
-        format!(" Kernel:         {}", app.system_info.kernel_version),
+        format!(" OS:             {}", app.system_info.os.name),
+        format!(" Host:           {}", app.system_info.os.hostname),
+        format!(" Kernel:         {}", app.system_info.os.kernel),
         format!(
             " Uptime:         {}",
             app.system_info.get_formatted_uptime()
         ),
         format!(" Packages:       {}", app.system_info.packages),
-        format!(" Shell:          {}", app.system_info.shell),
+        format!(" Shell:          {}", app.system_info.os.shell),
         format!(" Display:        {}", app.system_info.display),
-        format!(" DE:             {}", app.system_info.de_wm),
-        format!(" WM:             {}", app.system_info.wm),
+        format!(" DE:             {}", app.system_info.os.de_wm),
+        format!(" WM:             {}", app.system_info.os.wm),
         format!(" WM Theme:       {}", app.system_info.wm_theme),
         format!(" kr Theme:         {}", app.system_info.theme),
         format!(" Icons:          {}", app.system_info.icons),
         format!(" Font:           {}", app.system_info.font),
         format!(" Cursor:         {}", app.system_info.cursor),
-        format!(" Terminal:       {}", app.system_info.terminal),
+        format!(" Terminal:       {}", app.system_info.os.terminal),
         format!(
             " CPU:            {}",
             app.system_info
@@ -311,7 +311,7 @@ fn render_info(app: &App, frame: &mut Frame, area: Rect) {
         ), // Simplified disk
         // format!(" IP:             {}", app.system_info.local_ip),
         format!(" Battery:        {}", app.system_info.battery),
-        format!(" Locale:         {}", app.system_info.locale),
+        format!(" Locale:         {}", app.system_info.os.locale),
     ];
 
     let info_text = info_lines.join("\n");
