@@ -45,18 +45,17 @@ impl GpuInfo {
         }
 
         // Fallback to lspci if native failed or returned nothing
-        if names.is_empty() {
-            if let Ok(output) = std::process::Command::new("sh")
+        if names.is_empty()
+            && let Ok(output) = std::process::Command::new("sh")
                 .arg("-c")
                 .arg("lspci -mm | grep -E -i \"VGA|3D\"")
                 .output()
-            {
-                let raw = String::from_utf8(output.stdout).unwrap_or_default();
-                for line in raw.lines() {
-                    let parts: Vec<&str> = line.split('"').collect();
-                    if parts.len() >= 6 {
-                        names.push(format!("{} {}", parts[3], parts[5]).trim().to_string());
-                    }
+        {
+            let raw = String::from_utf8(output.stdout).unwrap_or_default();
+            for line in raw.lines() {
+                let parts: Vec<&str> = line.split('"').collect();
+                if parts.len() >= 6 {
+                    names.push(format!("{} {}", parts[3], parts[5]).trim().to_string());
                 }
             }
         }

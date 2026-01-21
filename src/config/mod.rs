@@ -45,11 +45,9 @@ impl Config {
         let config_path = Self::get_config_path();
 
         if let Some(path) = config_path {
-            if path.exists() {
-                if let Ok(contents) = fs::read_to_string(&path) {
-                    if let Ok(config) = toml::from_str(&contents) {
-                        return config;
-                    }
+            if let Ok(contents) = fs::read_to_string(&path) {
+                if let Ok(config) = toml::from_str(&contents) {
+                    return config;
                 }
             } else {
                 // Create default config file if it doesn't exist
@@ -67,8 +65,7 @@ impl Config {
             if let Some(parent) = path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            let toml_str = toml::to_string_pretty(self)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            let toml_str = toml::to_string_pretty(self).map_err(std::io::Error::other)?;
             fs::write(path, toml_str)?;
         }
         Ok(())

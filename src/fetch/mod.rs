@@ -54,6 +54,12 @@ pub struct SystemInfo {
     disk_handle: Disks,
 }
 
+impl Default for SystemInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemInfo {
     pub fn new() -> Self {
         // Initialize handles - BUT DO NOT REFRESH ALL
@@ -80,7 +86,7 @@ impl SystemInfo {
         let shell_path = std::env::var("SHELL").unwrap_or_else(|_| "Unknown".to_string());
         let shell = shell_path
             .split('/')
-            .last()
+            .next_back()
             .unwrap_or("Unknown")
             .to_string();
 
@@ -171,18 +177,14 @@ impl SystemInfo {
 
     fn detect_terminal(sys: &mut System) -> String {
         sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-        if let Ok(pid) = sysinfo::get_current_pid() {
-            if let Some(process) = sys.process(pid) {
-                if let Some(parent_pid) = process.parent() {
-                    if let Some(parent) = sys.process(parent_pid) {
-                        if let Some(grandparent_pid) = parent.parent()
-                            && let Some(grandparent) = sys.process(grandparent_pid)
-                        {
-                            return grandparent.name().to_string_lossy().to_string();
-                        }
-                    }
-                }
-            }
+        if let Ok(pid) = sysinfo::get_current_pid()
+            && let Some(process) = sys.process(pid)
+            && let Some(parent_pid) = process.parent()
+            && let Some(parent) = sys.process(parent_pid)
+            && let Some(grandparent_pid) = parent.parent()
+            && let Some(grandparent) = sys.process(grandparent_pid)
+        {
+            return grandparent.name().to_string_lossy().to_string();
         }
         "Unknown".to_string()
     }

@@ -13,6 +13,12 @@ pub struct TermBuffer {
     pub height: u16,
 }
 
+impl Default for TermBuffer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TermBuffer {
     pub fn new() -> Self {
         let (width, height) = terminal::size().unwrap_or((80, 24));

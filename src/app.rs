@@ -26,6 +26,12 @@ pub struct App {
     pub refresh_rate_ms: u64,
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
     pub fn new() -> Self {
         let config = Config::load();
