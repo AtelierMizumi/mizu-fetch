@@ -46,7 +46,7 @@ pub struct App {
     // Settings state
     pub settings_index: usize,
     pub refresh_rate_ms: u64,
-    
+
     // Async state
     pub package_rx: mpsc::Receiver<String>,
 }
@@ -60,7 +60,7 @@ impl Default for App {
 impl App {
     pub fn new() -> Self {
         let config = Config::load();
-        
+
         // Setup Async Package Fetching
         let (tx, rx) = mpsc::channel();
         thread::spawn(move || {
@@ -94,11 +94,12 @@ impl App {
         let update_processes = matches!(self.current_tab, AppTab::Processes);
         // Pass sort mode to update logic?
         // Actually, we can just sort in place here or in SystemInfo.
-        // Let's modify SystemInfo::refresh to take the sort mode? 
+        // Let's modify SystemInfo::refresh to take the sort mode?
         // Or better: SystemInfo::refresh updates the data, then we sort it here or in SystemInfo.
         // To keep logic encapsulated, let's pass the sort mode to refresh.
         // We need to update SystemInfo signature first. For now, let's pass it.
-        self.system_info.refresh(update_processes, self.process_sort);
+        self.system_info
+            .refresh(update_processes, self.process_sort);
     }
 
     pub fn next_tab(&mut self) {

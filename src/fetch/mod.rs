@@ -1,5 +1,5 @@
-use sysinfo::{Disks, Networks, System};
 use crate::app::ProcessSortMode;
+use sysinfo::{Disks, Networks, System};
 
 pub mod providers;
 
@@ -28,7 +28,7 @@ pub struct SystemInfo {
     // Modular Components
     pub os: OsInfo,
     pub cpu_info: CpuInfo,
-    
+
     // Static / Lazy fields
     pub gpus: Vec<String>,
     pub wm_theme: String,
@@ -50,7 +50,7 @@ pub struct SystemInfo {
     pub processes: Vec<ProcessInfo>,
     pub networks: Vec<NetworkInfo>,
     pub local_ip: String,
-    
+
     // Async Fields (Updated by App)
     pub packages: String,
 
@@ -69,14 +69,14 @@ impl Default for SystemInfo {
 impl SystemInfo {
     pub fn new() -> Self {
         let mut sys = System::new();
-        
+
         // Initialize handles
         let net_handle = Networks::new_with_refreshed_list();
         let disk_handle = Disks::new_with_refreshed_list();
 
         // Refresh specific components for static info
-        sys.refresh_cpu_usage(); 
-        
+        sys.refresh_cpu_usage();
+
         // OS Info (Static)
         let os = OsInfo::new(&mut sys);
 
@@ -98,7 +98,7 @@ impl SystemInfo {
 
         // Initial Memory Fetch
         let mem_info = MemoryInfo::new(&mut sys);
-        
+
         // Network & Disk initial fetch
         let networks = NetworkProvider::get_networks(&net_handle);
         let local_ip = NetworkProvider::get_local_ip(&net_handle);
@@ -138,7 +138,8 @@ impl SystemInfo {
         self.sys.refresh_memory();
 
         if update_processes {
-            self.sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+            self.sys
+                .refresh_processes(sysinfo::ProcessesToUpdate::All, true);
         }
 
         self.net_handle.refresh(true);
@@ -147,7 +148,7 @@ impl SystemInfo {
         // Update Dynamic Fields
         self.uptime = System::uptime();
         self.cpu_usage = self.sys.global_cpu_usage();
-        
+
         // MemoryInfo::new refreshes nothing inside (it assumes sys is fresh)
         self.memory_used = self.sys.used_memory();
         self.memory_total = self.sys.total_memory();
@@ -178,7 +179,11 @@ impl SystemInfo {
 
         match sort_mode {
             ProcessSortMode::Cpu => {
-                processes.sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap_or(std::cmp::Ordering::Equal));
+                processes.sort_by(|a, b| {
+                    b.cpu
+                        .partial_cmp(&a.cpu)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
             }
             ProcessSortMode::Memory => {
                 processes.sort_by(|a, b| b.mem.cmp(&a.mem));
@@ -187,7 +192,7 @@ impl SystemInfo {
                 processes.sort_by(|a, b| a.pid.cmp(&b.pid));
             }
         }
-        
+
         processes.truncate(50);
         self.processes = processes;
     }

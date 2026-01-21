@@ -18,10 +18,10 @@ impl NetworkProvider {
             .map(|(name, data)| {
                 let mut ip_v4 = "N/A".to_string();
                 for ip in data.ip_networks() {
-                     if let std::net::IpAddr::V4(ipv4) = ip.addr {
-                         ip_v4 = ipv4.to_string();
-                         break;
-                     }
+                    if let std::net::IpAddr::V4(ipv4) = ip.addr {
+                        ip_v4 = ipv4.to_string();
+                        break;
+                    }
                 }
 
                 NetworkInfo {

@@ -8,6 +8,34 @@ use std::path::PathBuf;
 pub struct Config {
     pub theme: Theme,
     pub refresh_rate: u64,
+    #[serde(default = "default_module_order")]
+    pub modules: Vec<String>,
+}
+
+fn default_module_order() -> Vec<String> {
+    vec![
+        "os".to_string(),
+        "host".to_string(),
+        "kernel".to_string(),
+        "uptime".to_string(),
+        "packages".to_string(),
+        "shell".to_string(),
+        "display".to_string(),
+        "de".to_string(),
+        "wm".to_string(),
+        "wm_theme".to_string(),
+        "theme".to_string(),
+        "icons".to_string(),
+        "font".to_string(),
+        "cursor".to_string(),
+        "terminal".to_string(),
+        "cpu".to_string(),
+        "gpu".to_string(),
+        "memory".to_string(),
+        "disk".to_string(),
+        "battery".to_string(),
+        "locale".to_string(),
+    ]
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -36,6 +64,7 @@ impl Default for Config {
                 gauge_cpu_high: "#ff0000".to_string(), // Red (Hex)
                 gauge_ram: "#ff00ff".to_string(),      // Magenta (Hex)
             },
+            modules: default_module_order(),
         }
     }
 }

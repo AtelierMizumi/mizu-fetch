@@ -82,7 +82,7 @@ impl OsInfo {
     }
 
     fn detect_terminal(sys: &mut System) -> String {
-        // refresh_processes is heavy, so it should be called carefully. 
+        // refresh_processes is heavy, so it should be called carefully.
         // In the original code it was called inside detect_terminal.
         // We will assume the caller might have refreshed it or we do it here strictly.
         // For safety, let's refresh here as it relies on PIDs which might be stale if not refreshed.

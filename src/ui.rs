@@ -113,9 +113,21 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 // --- PROCESS MONITOR RENDER ---
 fn render_processes(app: &App, frame: &mut Frame, area: Rect) {
-    let cpu_header = if matches!(app.process_sort, ProcessSortMode::Cpu) { "CPU % [*]" } else { "CPU %" };
-    let mem_header = if matches!(app.process_sort, ProcessSortMode::Memory) { "Mem (MB) [*]" } else { "Mem (MB)" };
-    let pid_header = if matches!(app.process_sort, ProcessSortMode::Pid) { "PID [*]" } else { "PID" };
+    let cpu_header = if matches!(app.process_sort, ProcessSortMode::Cpu) {
+        "CPU % [*]"
+    } else {
+        "CPU %"
+    };
+    let mem_header = if matches!(app.process_sort, ProcessSortMode::Memory) {
+        "Mem (MB) [*]"
+    } else {
+        "Mem (MB)"
+    };
+    let pid_header = if matches!(app.process_sort, ProcessSortMode::Pid) {
+        "PID [*]"
+    } else {
+        "PID"
+    };
 
     let header = Row::new(vec![pid_header, "Name", cpu_header, mem_header])
         .style(
@@ -285,53 +297,61 @@ fn render_info(app: &App, frame: &mut Frame, area: Rect) {
     // We can use a simpler approach: padded keys.
     // Key width approx 15-20 chars including icon.
 
-    let info_lines = vec![
-        format!("                  -------------------"),
-        format!(" OS:             {}", app.system_info.os.name),
-        format!(" Host:           {}", app.system_info.os.hostname),
-        format!(" Kernel:         {}", app.system_info.os.kernel),
-        format!(
-            " Uptime:         {}",
-            app.system_info.get_formatted_uptime()
-        ),
-        format!(" Packages:       {}", app.system_info.packages),
-        format!(" Shell:          {}", app.system_info.os.shell),
-        format!(" Display:        {}", app.system_info.display),
-        format!(" DE:             {}", app.system_info.os.de_wm),
-        format!(" WM:             {}", app.system_info.os.wm),
-        format!(" WM Theme:       {}", app.system_info.wm_theme),
-        format!(" kr Theme:         {}", app.system_info.theme),
-        format!(" Icons:          {}", app.system_info.icons),
-        format!(" Font:           {}", app.system_info.font),
-        format!(" Cursor:         {}", app.system_info.cursor),
-        format!(" Terminal:       {}", app.system_info.os.terminal),
-        format!(
-            " CPU:            {}",
-            app.system_info
-                .cpu_info
-                .models
-                .first()
-                .unwrap_or(&"Unknown".to_string())
-        ),
-        format!("﬙ GPU:            {}", app.system_info.gpus.join(", ")),
-        format!(
-            " Memory:         {:.2} GiB / {:.2} GiB ({:.0}%)",
-            app.system_info.memory_used as f64 / 1024.0 / 1024.0 / 1024.0,
-            app.system_info.memory_total as f64 / 1024.0 / 1024.0 / 1024.0,
-            (app.system_info.memory_used as f64 / app.system_info.memory_total as f64) * 100.0
-        ),
-        format!(
-            " Disk (/):       {}",
-            app.system_info
-                .disk_usage
-                .split(" - ")
-                .next()
-                .unwrap_or("Unknown")
-        ), // Simplified disk
-        // format!(" IP:             {}", app.system_info.local_ip),
-        format!(" Battery:        {}", app.system_info.battery),
-        format!(" Locale:         {}", app.system_info.os.locale),
-    ];
+    let mut info_lines = vec![format!("                  -------------------")];
+
+    for module in &app.config.modules {
+        match module.as_str() {
+            "os" => info_lines.push(format!(" OS:             {}", app.system_info.os.name)),
+            "host" => info_lines.push(format!(" Host:           {}", app.system_info.os.hostname)),
+            "kernel" => info_lines.push(format!(" Kernel:         {}", app.system_info.os.kernel)),
+            "uptime" => info_lines.push(format!(
+                " Uptime:         {}",
+                app.system_info.get_formatted_uptime()
+            )),
+            "packages" => {
+                info_lines.push(format!(" Packages:       {}", app.system_info.packages))
+            }
+            "shell" => info_lines.push(format!(" Shell:          {}", app.system_info.os.shell)),
+            "display" => info_lines.push(format!(" Display:        {}", app.system_info.display)),
+            "de" => info_lines.push(format!(" DE:             {}", app.system_info.os.de_wm)),
+            "wm" => info_lines.push(format!(" WM:             {}", app.system_info.os.wm)),
+            "wm_theme" => {
+                info_lines.push(format!(" WM Theme:       {}", app.system_info.wm_theme))
+            }
+            "theme" => info_lines.push(format!(" kr Theme:         {}", app.system_info.theme)),
+            "icons" => info_lines.push(format!(" Icons:          {}", app.system_info.icons)),
+            "font" => info_lines.push(format!(" Font:           {}", app.system_info.font)),
+            "cursor" => info_lines.push(format!(" Cursor:         {}", app.system_info.cursor)),
+            "terminal" => {
+                info_lines.push(format!(" Terminal:       {}", app.system_info.os.terminal))
+            }
+            "cpu" => info_lines.push(format!(
+                " CPU:            {}",
+                app.system_info
+                    .cpu_info
+                    .models
+                    .first()
+                    .unwrap_or(&"Unknown".to_string())
+            )),
+            "gpu" => info_lines.push(format!(
+                "﬙ GPU:            {}",
+                app.system_info.gpus.join(", ")
+            )),
+            "memory" => info_lines.push(format!(
+                " Memory:         {:.2} GiB / {:.2} GiB ({:.0}%)",
+                app.system_info.memory_used as f64 / 1024.0 / 1024.0 / 1024.0,
+                app.system_info.memory_total as f64 / 1024.0 / 1024.0 / 1024.0,
+                (app.system_info.memory_used as f64 / app.system_info.memory_total as f64) * 100.0
+            )),
+            "disk" => info_lines.push(format!(" Disk:           {}", app.system_info.disk_usage)),
+            "battery" => info_lines.push(format!(" Battery:        {}", app.system_info.battery)),
+            "locale" => info_lines.push(format!(" Locale:         {}", app.system_info.os.locale)),
+            "local_ip" => {
+                info_lines.push(format!(" IP:             {}", app.system_info.local_ip))
+            }
+            _ => {} // Ignore unknown modules
+        }
+    }
 
     let info_text = info_lines.join("\n");
 
@@ -603,7 +623,14 @@ fn render_settings(app: &App, frame: &mut Frame, area: Rect) {
                 "Magenta".to_string()
             },
         ),
-        ("Show Hints", if app.show_hints { "Yes".to_string() } else { "No".to_string() }),
+        (
+            "Show Hints",
+            if app.show_hints {
+                "Yes".to_string()
+            } else {
+                "No".to_string()
+            },
+        ),
     ];
 
     let rows: Vec<Row> = options
