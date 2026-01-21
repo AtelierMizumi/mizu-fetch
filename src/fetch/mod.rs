@@ -3,9 +3,12 @@ use sysinfo::{Disks, Networks, System};
 
 mod providers;
 
+use providers::battery::BatteryInfo;
 use providers::cpu::CpuInfo;
+use providers::display::DisplayInfo;
 use providers::gpu::GpuInfo;
 use providers::memory::MemoryInfo;
+use providers::style::StyleInfo;
 
 pub struct ProcessInfo {
     pub pid: u32,
@@ -30,8 +33,17 @@ pub struct SystemInfo {
     pub shell: String,
     pub terminal: String,
     pub de_wm: String,
+    pub wm: String, // Separate WM
     pub packages: String,
     pub local_ip: String,
+    pub display: String,
+    pub wm_theme: String,
+    pub theme: String,
+    pub icons: String,
+    pub font: String,
+    pub cursor: String,
+    pub battery: String,
+    pub locale: String,
 
     // Hardware Info (Cached/Lazy)
     pub cpu_info: CpuInfo,
@@ -94,6 +106,20 @@ impl SystemInfo {
             .or_else(|_| std::env::var("DESKTOP_SESSION"))
             .unwrap_or_else(|_| "Unknown".to_string());
 
+        let wm = Self::detect_wm(&sys);
+
+        // Style Info
+        let style = StyleInfo::new(&sys);
+
+        // Display Info
+        let display = DisplayInfo::new();
+
+        // Battery Info
+        let battery = BatteryInfo::new();
+
+        // Locale
+        let locale = std::env::var("LANG").unwrap_or_else(|_| "Unknown".to_string());
+
         // Packages (Expensive, could be lazy loaded or async)
         // For now keep it here but we should move it out of the main thread in future
         let packages = Self::count_packages();
@@ -115,8 +141,17 @@ impl SystemInfo {
             shell,
             terminal,
             de_wm,
+            wm,
             packages,
             local_ip: "127.0.0.1".to_string(),
+            display,
+            wm_theme: style.wm_theme,
+            theme: style.theme,
+            icons: style.icons,
+            font: style.font,
+            cursor: style.cursor,
+            battery,
+            locale,
             cpu_info,
             cpu_usage: 0.0,
             gpus: gpu_info.names,
@@ -133,8 +168,45 @@ impl SystemInfo {
         };
 
         // Initial partial refresh for dynamic data
-        info.refresh();
+        info.refresh(true);
         info
+    }
+
+    fn detect_wm(sys: &System) -> String {
+        // Simple scan for common WM process names
+        let wms = [
+            "kwin_wayland",
+            "kwin_x11",
+            "gnome-shell",
+            "mutter",
+            "sway",
+            "hyprland",
+            "openbox",
+            "i3",
+            "bspwm",
+            "xfwm4",
+            "metacity",
+            "weston",
+            "labwc",
+            "wayfire",
+        ];
+
+        for (_pid, process) in sys.processes() {
+            let name = process.name().to_string_lossy();
+            for wm in wms {
+                if name.contains(wm) {
+                    // Prettify name
+                    if wm.starts_with("kwin") {
+                        return "KWin".to_string();
+                    }
+                    if wm == "gnome-shell" {
+                        return "Mutter (GNOME)".to_string();
+                    }
+                    return wm.to_string(); // Return capitalized?
+                }
+            }
+        }
+        "Unknown".to_string()
     }
 
     fn count_packages() -> String {
@@ -153,6 +225,30 @@ impl SystemInfo {
                 pkgs.push(format!("{} (pacman)", count));
             }
         }
+        // Dpkg (Debian/Ubuntu)
+        if let Ok(output) = Command::new("sh")
+            .arg("-c")
+            .arg("dpkg-query -f '${binary:Package}\n' -W | wc -l")
+            .output()
+        {
+            let count = String::from_utf8(output.stdout)
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            if !count.is_empty() && count != "0" {
+                pkgs.push(format!("{} (dpkg)", count));
+            }
+        }
+        // RPM (Fedora/RHEL)
+        if let Ok(output) = Command::new("sh").arg("-c").arg("rpm -qa | wc -l").output() {
+            let count = String::from_utf8(output.stdout)
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            if !count.is_empty() && count != "0" {
+                pkgs.push(format!("{} (rpm)", count));
+            }
+        }
         // Flatpak
         if let Ok(output) = Command::new("sh")
             .arg("-c")
@@ -164,7 +260,7 @@ impl SystemInfo {
                 .trim()
                 .to_string();
             if !count.is_empty() && count != "0" {
-                pkgs.push(format!("{} (flatpak)", count));
+                pkgs.push(format!("{} (flatpak-user)", count));
             }
         }
 
@@ -189,14 +285,17 @@ impl SystemInfo {
         "Unknown".to_string()
     }
 
-    pub fn refresh(&mut self) {
+    pub fn refresh(&mut self, update_processes: bool) {
         // Targeted refreshes only
         self.sys.refresh_cpu_usage(); // Just usage, not full list
         self.sys.refresh_memory();
+
         // Processes need list refresh but try to minimize impact if possible
-        // refresh_processes is heavy.
-        self.sys
-            .refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        // refresh_processes is heavy. Only run if requested.
+        if update_processes {
+            self.sys
+                .refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        }
 
         self.net_handle.refresh(true);
         self.disk_handle.refresh(true);
@@ -209,8 +308,10 @@ impl SystemInfo {
         self.swap_used = self.sys.used_swap();
         self.swap_total = self.sys.total_swap();
 
-        // Processes (Top 50)
-        self.update_processes();
+        // Processes (Top 50) - Only update if we refreshed them
+        if update_processes {
+            self.update_processes();
+        }
 
         // Network Stats
         self.update_networks();
@@ -220,6 +321,10 @@ impl SystemInfo {
 
         // Local IP
         self.update_local_ip();
+
+        // Refresh battery if easy? Or just keep static for now as per design.
+        // Actually fastfetch battery status changes.
+        self.battery = BatteryInfo::new();
     }
 
     fn update_processes(&mut self) {
@@ -288,5 +393,21 @@ impl SystemInfo {
             }
         }
         self.local_ip = "127.0.0.1".to_string();
+    }
+
+    pub fn get_formatted_uptime(&self) -> String {
+        let seconds = self.uptime;
+        let days = seconds / 86400;
+        let hours = (seconds % 86400) / 3600;
+        let minutes = (seconds % 3600) / 60;
+        let secs = seconds % 60;
+
+        if days > 0 {
+            format!("{} days, {} hours, {} mins", days, hours, minutes)
+        } else if hours > 0 {
+            format!("{} hours, {} mins", hours, minutes)
+        } else {
+            format!("{} mins, {} secs", minutes, secs)
+        }
     }
 }

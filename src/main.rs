@@ -4,7 +4,7 @@ use mizu::app::{App, AppTab};
 use mizu::tui::{init, restore};
 use mizu::ui::render;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -34,15 +34,19 @@ fn main() -> std::io::Result<()> {
     // 'App::new()' loads configuration and initializes system info handles.
     let mut app = App::new();
 
+    let mut last_tick = Instant::now();
+
     loop {
         // Draw Interface
         // This closure is called every frame to render the UI based on current app state.
         terminal.draw(|f| render(&app, f))?;
 
+        let timeout = Duration::from_millis(app.refresh_rate_ms)
+            .checked_sub(last_tick.elapsed())
+            .unwrap_or_else(|| Duration::from_secs(0));
+
         // Handle Input Events
-        // We poll for events with a timeout equal to the refresh rate.
-        // This ensures the UI updates at the user-defined frequency even if no input occurs.
-        if event::poll(Duration::from_millis(app.refresh_rate_ms))? {
+        if event::poll(timeout)? {
             match event::read()? {
                 // Keyboard Input
                 Event::Key(key) => {
@@ -111,8 +115,10 @@ fn main() -> std::io::Result<()> {
         }
 
         // Update Data
-        // Refreshes CPU, RAM, Network, etc.
-        app.on_tick();
+        if last_tick.elapsed() >= Duration::from_millis(app.refresh_rate_ms) {
+            app.on_tick();
+            last_tick = Instant::now();
+        }
 
         // Check Exit Condition
         if app.should_quit {

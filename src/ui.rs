@@ -142,7 +142,7 @@ fn render_processes(app: &App, frame: &mut Frame, area: Rect) {
 
     frame.render_widget(
         CyberpunkBlock::new(
-            " Network Traffic ",
+            " Process Monitor ",
             parse_color(&app.config.theme.border_color),
         ),
         area,
@@ -254,28 +254,67 @@ fn render_logo(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_info(app: &App, frame: &mut Frame, area: Rect) {
-    // Chỉ hiển thị các thông tin cơ bản để tương thích ngược với App struct cũ
-    let info_text = format!(
-        "\n\
-          OS:       {}\n\
-          Kernel:   {}\n\
-          Host:     {}\n\
-          Uptime:   {}s\n\
-          Shell:    {}\n\
-          Terminal: {}\n\
-          DE/WM:    {}\n\
-          Pkgs:     {}\n\
-          IP:       {}\n",
-        app.system_info.os_name,
-        app.system_info.kernel_version,
-        app.system_info.hostname,
-        app.system_info.uptime,
-        app.system_info.shell,
-        app.system_info.terminal,
-        app.system_info.de_wm,
-        app.system_info.packages,
-        app.system_info.local_ip,
-    );
+    // fastfetch style icons and labels
+    // We want aligned output.
+    //
+    // Format:
+    // Icon Label: Value
+    //
+    // We need to handle padding manually or use a Table if strict alignment is needed,
+    // but Paragraph is simpler for colorized lines.
+
+    // We can use a simpler approach: padded keys.
+    // Key width approx 15-20 chars including icon.
+
+    let info_lines = vec![
+        format!("                  -------------------"),
+        format!(" OS:             {}", app.system_info.os_name),
+        format!(" Host:           {}", app.system_info.hostname),
+        format!(" Kernel:         {}", app.system_info.kernel_version),
+        format!(
+            " Uptime:         {}",
+            app.system_info.get_formatted_uptime()
+        ),
+        format!(" Packages:       {}", app.system_info.packages),
+        format!(" Shell:          {}", app.system_info.shell),
+        format!(" Display:        {}", app.system_info.display),
+        format!(" DE:             {}", app.system_info.de_wm),
+        format!(" WM:             {}", app.system_info.wm),
+        format!(" WM Theme:       {}", app.system_info.wm_theme),
+        format!(" kr Theme:         {}", app.system_info.theme),
+        format!(" Icons:          {}", app.system_info.icons),
+        format!(" Font:           {}", app.system_info.font),
+        format!(" Cursor:         {}", app.system_info.cursor),
+        format!(" Terminal:       {}", app.system_info.terminal),
+        format!(
+            " CPU:            {}",
+            app.system_info
+                .cpu_info
+                .models
+                .first()
+                .unwrap_or(&"Unknown".to_string())
+        ),
+        format!("﬙ GPU:            {}", app.system_info.gpus.join(", ")),
+        format!(
+            " Memory:         {:.2} GiB / {:.2} GiB ({:.0}%)",
+            app.system_info.memory_used as f64 / 1024.0 / 1024.0 / 1024.0,
+            app.system_info.memory_total as f64 / 1024.0 / 1024.0 / 1024.0,
+            (app.system_info.memory_used as f64 / app.system_info.memory_total as f64) * 100.0
+        ),
+        format!(
+            " Disk (/):       {}",
+            app.system_info
+                .disk_usage
+                .split(" - ")
+                .next()
+                .unwrap_or("Unknown")
+        ), // Simplified disk
+        // format!(" IP:             {}", app.system_info.local_ip),
+        format!(" Battery:        {}", app.system_info.battery),
+        format!(" Locale:         {}", app.system_info.locale),
+    ];
+
+    let info_text = info_lines.join("\n");
 
     if area.width > 30 && area.height > 5 {
         let block =
@@ -286,12 +325,13 @@ fn render_info(app: &App, frame: &mut Frame, area: Rect) {
 
         let info_paragraph = Paragraph::new(info_text)
             .style(Style::default().fg(parse_color(&app.config.theme.text_color)))
-            .wrap(Wrap { trim: true });
+            // .wrap(Wrap { trim: true }) // Don't trim or wrap to keep alignment if possible
+            .scroll((0, 0)); // Ensure start at top
+
         frame.render_widget(info_paragraph, inner_area);
     } else {
         let info_paragraph = Paragraph::new(info_text)
-            .style(Style::default().fg(parse_color(&app.config.theme.text_color)))
-            .wrap(Wrap { trim: true });
+            .style(Style::default().fg(parse_color(&app.config.theme.text_color)));
         frame.render_widget(info_paragraph, area);
     };
 }
@@ -352,7 +392,11 @@ fn render_bottom_screen(app: &App, frame: &mut Frame, area: Rect, is_compact: bo
     let cpu_label = format!(
         "CPU: {:.1}% ({})",
         app.system_info.cpu_usage,
-        app.system_info.cpu_info.models.join(", ")
+        app.system_info
+            .cpu_info
+            .models
+            .first()
+            .unwrap_or(&"Unknown".to_string())
     );
     let cpu_ratio = app.system_info.cpu_usage as f64 / 100.0;
     let cpu_color = if app.system_info.cpu_usage > 80.0 {

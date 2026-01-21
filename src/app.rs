@@ -48,7 +48,12 @@ impl App {
     }
 
     pub fn on_tick(&mut self) {
-        self.system_info.refresh();
+        // Only refresh processes if we are on the Processes tab or if we need to detect terminal (initial load)
+        // But here we are in the main loop.
+        // Let's only refresh processes if the current tab is Processes.
+        // This saves a lot of CPU.
+        let update_processes = matches!(self.current_tab, AppTab::Processes);
+        self.system_info.refresh(update_processes);
     }
 
     pub fn next_tab(&mut self) {
