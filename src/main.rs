@@ -60,6 +60,11 @@ fn main() -> std::io::Result<()> {
                                 app.show_help = false;
                             }
                         }
+                        KeyCode::Char('s') => {
+                            if !app.show_help && matches!(app.current_tab, AppTab::Processes) {
+                                app.process_sort = app.process_sort.next();
+                            }
+                        }
                         _ => {
                             // Only process other keys if help is NOT shown
                             if !app.show_help {

@@ -1,4 +1,4 @@
-use crate::app::{App, AppTab};
+use crate::app::{App, AppTab, ProcessSortMode};
 use crate::config::parse_color;
 use crate::draw::logos::get_logo;
 use crate::ui::widgets::CyberpunkBlock;
@@ -14,9 +14,20 @@ pub fn render(app: &App, frame: &mut Frame) {
 
     // --- TAB BAR RENDER ---
     // Use 3 lines for tabs, rest for content
+    // Use 3 lines for tabs, 1 line for footer (if enabled), rest for content
+    let constraints = if app.show_hints {
+        vec![
+            Constraint::Length(3),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ]
+    } else {
+        vec![Constraint::Length(3), Constraint::Min(0)]
+    };
+
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(0)])
+        .constraints(constraints)
         .split(area);
 
     render_tabs(app, frame, chunks[0]);
@@ -28,6 +39,10 @@ pub fn render(app: &App, frame: &mut Frame) {
         AppTab::Processes => render_processes(app, frame, content_area),
         AppTab::Network => render_network(app, frame, content_area),
         AppTab::Settings => render_settings(app, frame, content_area),
+    }
+
+    if app.show_hints && chunks.len() > 2 {
+        render_footer(app, frame, chunks[2]);
     }
 
     if app.show_help {
@@ -98,7 +113,11 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 
 // --- PROCESS MONITOR RENDER ---
 fn render_processes(app: &App, frame: &mut Frame, area: Rect) {
-    let header = Row::new(vec!["PID", "Name", "CPU %", "Mem (MB)"])
+    let cpu_header = if matches!(app.process_sort, ProcessSortMode::Cpu) { "CPU % [*]" } else { "CPU %" };
+    let mem_header = if matches!(app.process_sort, ProcessSortMode::Memory) { "Mem (MB) [*]" } else { "Mem (MB)" };
+    let pid_header = if matches!(app.process_sort, ProcessSortMode::Pid) { "PID [*]" } else { "PID" };
+
+    let header = Row::new(vec![pid_header, "Name", cpu_header, mem_header])
         .style(
             Style::default()
                 .fg(Color::Yellow)
@@ -505,6 +524,7 @@ fn render_network(app: &App, frame: &mut Frame, area: Rect) {
     // Interface List
     let header = Row::new(vec![
         "Interface",
+        "IP Address",
         "RX Speed",
         "TX Speed",
         "Total RX",
@@ -532,6 +552,7 @@ fn render_network(app: &App, frame: &mut Frame, area: Rect) {
 
             Row::new(vec![
                 network_info.name.clone(),
+                network_info.ip_v4.clone(),
                 format!("{:.1} KB/s", rx_speed),
                 format!("{:.1} KB/s", tx_speed),
                 format!("{:.1} MB", network_info.total_rx as f64 / 1024.0 / 1024.0),
@@ -545,10 +566,11 @@ fn render_network(app: &App, frame: &mut Frame, area: Rect) {
         rows,
         [
             Constraint::Length(15), // Interface
-            Constraint::Length(15), // RX Speed
-            Constraint::Length(15), // TX Speed
-            Constraint::Length(15), // Total RX
-            Constraint::Length(15), // Total TX
+            Constraint::Length(16), // IP Address
+            Constraint::Length(12), // RX Speed
+            Constraint::Length(12), // TX Speed
+            Constraint::Length(12), // Total RX
+            Constraint::Length(12), // Total TX
         ],
     )
     .header(header)
@@ -581,6 +603,7 @@ fn render_settings(app: &App, frame: &mut Frame, area: Rect) {
                 "Magenta".to_string()
             },
         ),
+        ("Show Hints", if app.show_hints { "Yes".to_string() } else { "No".to_string() }),
     ];
 
     let rows: Vec<Row> = options
@@ -632,4 +655,18 @@ fn render_tabs(app: &App, frame: &mut Frame, area: Rect) {
         .divider(" | ");
 
     frame.render_widget(tabs_widget, area);
+}
+
+fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
+    let hints = match app.current_tab {
+        AppTab::Dashboard => "q: Quit | ?: Help | 1-4: Tabs",
+        AppTab::Processes => "j/k: Scroll | s: Sort | ?: Help",
+        AppTab::Network => "?: Help",
+        AppTab::Settings => "Enter: Toggle | j/k: Nav | ?: Help",
+    };
+
+    let p = Paragraph::new(hints)
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center);
+    frame.render_widget(p, area);
 }

@@ -13,6 +13,24 @@ pub enum AppTab {
 pub enum SettingsOption {
     RefreshRate,
     ThemeColor,
+    ShowHints,
+}
+
+#[derive(Clone, Copy)]
+pub enum ProcessSortMode {
+    Cpu,
+    Memory,
+    Pid,
+}
+
+impl ProcessSortMode {
+    pub fn next(&self) -> Self {
+        match self {
+            Self::Cpu => Self::Memory,
+            Self::Memory => Self::Pid,
+            Self::Pid => Self::Cpu,
+        }
+    }
 }
 
 pub struct App {
@@ -20,8 +38,10 @@ pub struct App {
     pub current_tab: AppTab,
     pub system_info: SystemInfo,
     pub config: Config,
-    pub process_scroll: usize, 
-    pub show_help: bool,       
+    pub process_scroll: usize,
+    pub process_sort: ProcessSortMode, // New: Sort mode
+    pub show_help: bool,
+    pub show_hints: bool, // New: Hints toggle
 
     // Settings state
     pub settings_index: usize,
@@ -54,7 +74,9 @@ impl App {
             current_tab: AppTab::Dashboard,
             system_info: SystemInfo::new(),
             process_scroll: 0,
+            process_sort: ProcessSortMode::Cpu,
             show_help: false,
+            show_hints: true, // Default to true
             settings_index: 0,
             refresh_rate_ms: config.refresh_rate,
             config,
@@ -70,7 +92,13 @@ impl App {
 
         // Only refresh processes if we are on the Processes tab
         let update_processes = matches!(self.current_tab, AppTab::Processes);
-        self.system_info.refresh(update_processes);
+        // Pass sort mode to update logic?
+        // Actually, we can just sort in place here or in SystemInfo.
+        // Let's modify SystemInfo::refresh to take the sort mode? 
+        // Or better: SystemInfo::refresh updates the data, then we sort it here or in SystemInfo.
+        // To keep logic encapsulated, let's pass the sort mode to refresh.
+        // We need to update SystemInfo signature first. For now, let's pass it.
+        self.system_info.refresh(update_processes, self.process_sort);
     }
 
     pub fn next_tab(&mut self) {
@@ -106,8 +134,8 @@ impl App {
 
     // Settings navigation
     pub fn settings_next(&mut self) {
-        // We have 2 settings currently: Refresh Rate (0) and Theme Color (1)
-        if self.settings_index < 1 {
+        // We have 3 settings: Refresh Rate (0), Theme Color (1), Show Hints (2)
+        if self.settings_index < 2 {
             self.settings_index += 1;
         }
     }
@@ -148,6 +176,10 @@ impl App {
                     self.config.theme.gauge_cpu_low = "#00ffff".to_string(); // Cyan hex
                 }
                 let _ = self.config.save();
+            }
+            2 => {
+                // Show Hints: Toggle
+                self.show_hints = !self.show_hints;
             }
             _ => {}
         }

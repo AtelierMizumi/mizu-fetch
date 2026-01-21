@@ -1,4 +1,5 @@
 use sysinfo::{Disks, Networks, System};
+use crate::app::ProcessSortMode;
 
 pub mod providers;
 
@@ -131,7 +132,7 @@ impl SystemInfo {
         }
     }
 
-    pub fn refresh(&mut self, update_processes: bool) {
+    pub fn refresh(&mut self, update_processes: bool, sort_mode: ProcessSortMode) {
         // Targeted refreshes only
         self.sys.refresh_cpu_usage();
         self.sys.refresh_memory();
@@ -154,7 +155,7 @@ impl SystemInfo {
         self.swap_total = self.sys.total_swap();
 
         if update_processes {
-            self.update_processes();
+            self.update_processes(sort_mode);
         }
 
         self.networks = NetworkProvider::get_networks(&self.net_handle);
@@ -162,7 +163,7 @@ impl SystemInfo {
         self.disk_usage = DiskProvider::get_disk_usage(&self.disk_handle);
     }
 
-    fn update_processes(&mut self) {
+    fn update_processes(&mut self, sort_mode: ProcessSortMode) {
         let mut processes: Vec<ProcessInfo> = self
             .sys
             .processes()
@@ -175,11 +176,18 @@ impl SystemInfo {
             })
             .collect();
 
-        processes.sort_by(|a, b| {
-            b.cpu
-                .partial_cmp(&a.cpu)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        match sort_mode {
+            ProcessSortMode::Cpu => {
+                processes.sort_by(|a, b| b.cpu.partial_cmp(&a.cpu).unwrap_or(std::cmp::Ordering::Equal));
+            }
+            ProcessSortMode::Memory => {
+                processes.sort_by(|a, b| b.mem.cmp(&a.mem));
+            }
+            ProcessSortMode::Pid => {
+                processes.sort_by(|a, b| a.pid.cmp(&b.pid));
+            }
+        }
+        
         processes.truncate(50);
         self.processes = processes;
     }
