@@ -109,6 +109,64 @@ impl Config {
     }
 }
 
+impl Theme {
+    pub fn from_name(name: &str) -> Self {
+        match name.to_lowercase().as_str() {
+            "dracula" => Self {
+                border_color: "#bd93f9".to_string(),   // Purple
+                title_color: "#ff79c6".to_string(),    // Pink
+                text_color: "#f8f8f2".to_string(),     // Foreground
+                key_color: "#8be9fd".to_string(),      // Cyan
+                value_color: "#f1fa8c".to_string(),    // Yellow
+                gauge_cpu_low: "#50fa7b".to_string(),  // Green
+                gauge_cpu_high: "#ff5555".to_string(), // Red
+                gauge_ram: "#ffb86c".to_string(),      // Orange
+            },
+            "github" => Self {
+                border_color: "#30363d".to_string(),   // Border Gray
+                title_color: "#58a6ff".to_string(),    // Blue
+                text_color: "#c9d1d9".to_string(),     // FG
+                key_color: "#d2a8ff".to_string(),      // Purple
+                value_color: "#79c0ff".to_string(),    // Light Blue
+                gauge_cpu_low: "#3fb950".to_string(),  // Green
+                gauge_cpu_high: "#ff7b72".to_string(), // Red
+                gauge_ram: "#d2a8ff".to_string(),      // Purple
+            },
+            "material" => Self {
+                border_color: "#89ddff".to_string(),   // Cyan
+                title_color: "#c792ea".to_string(),    // Purple
+                text_color: "#eeffff".to_string(),     // FG
+                key_color: "#f07178".to_string(),      // Red
+                value_color: "#ffcb6b".to_string(),    // Yellow
+                gauge_cpu_low: "#c3e88d".to_string(),  // Green
+                gauge_cpu_high: "#ff5370".to_string(), // Red
+                gauge_ram: "#f78c6c".to_string(),      // Orange
+            },
+            "catppuccin" => Self {
+                border_color: "#cba6f7".to_string(),   // Mauve
+                title_color: "#89b4fa".to_string(),    // Blue
+                text_color: "#cdd6f4".to_string(),     // Text
+                key_color: "#f9e2af".to_string(),      // Yellow
+                value_color: "#a6e3a1".to_string(),    // Green
+                gauge_cpu_low: "#94e2d5".to_string(),  // Teal
+                gauge_cpu_high: "#f38ba8".to_string(), // Red
+                gauge_ram: "#fab387".to_string(),      // Peach
+            },
+            // Default / Neon
+            _ => Self {
+                border_color: "#00ffff".to_string(),
+                title_color: "#00ffff".to_string(),
+                text_color: "#ffffff".to_string(),
+                key_color: "#ff00ff".to_string(),
+                value_color: "#00ffff".to_string(),
+                gauge_cpu_low: "#00ffff".to_string(),
+                gauge_cpu_high: "#ff0000".to_string(),
+                gauge_ram: "#ff00ff".to_string(),
+            },
+        }
+    }
+}
+
 pub fn parse_color(color_str: &str) -> Color {
     if color_str.starts_with('#') {
         if let Ok((r, g, b)) = hex_to_rgb(color_str) {
